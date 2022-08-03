@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:azure-storage="http://www.mulesoft.org/schema/mule/azure-storage" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/azure-storage http://www.mulesoft.org/schema/mule/azure-storage/current/mule-azure-storage.xsd">
+	<azure-storage:config name="Azure_Storage_Config" doc:name="Azure Storage Config" doc:id="6e763767-7d0f-4653-a032-91c67cae85d5" >
+		<azure-storage:access-key-azure-connection accountName="heruwalastorage" accountKey="DefaultEndpointsProtocol=https;AccountName=heruwalastorage;AccountKey=1RUo1AeCj6nl31CAu8ejWWf9QS2P8ojna5lS56qyHdAx9cqYZHmAWZVjW4fOIXs7e4eWlpeZ6mlu+ASt4ZaL9Q==;EndpointSuffix=core.windows.net" />
+	</azure-storage:config>
+	<flow name="queue-message" doc:id="cb54c86e-3e9c-44a1-aa99-9a4979c6c804" >
+		<scheduler doc:name="Scheduler" doc:id="29384717-3dcb-43a2-8731-488ed24b5f89" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="1" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<ee:transform doc:name="Transform Message" doc:id="33e8181c-f46c-40fb-b999-c6d0c989178d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	message: {
+		test: "data",
+		account: "dhaval",
+		isActive: true
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="62246380-ba61-451b-ad7c-0ee743edda64" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	queueMessage: write(payload.message, "application/json"),
+    queueName: "inbound-queue"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<azure-storage:add-message-to-queue doc:name="Add message to queue" doc:id="3f4a0ebf-53df-4987-8e5e-ea15565ac204" message="#[payload]" config-ref="Azure_Storage_Config"/>
+	</flow>
+	<flow name="dequeue-message" doc:id="9149b9ff-62a0-46aa-8c99-ece96ae2c5fe" >
+		<scheduler doc:name="Scheduler" doc:id="00afcbdd-bbb0-400b-b8d2-2ed40d40bd45" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="30" startDelay="300" timeUnit="SECONDS"/>
+			</scheduling-strategy>
+		</scheduler>
+		<azure-storage:dequeue-message doc:name="Dequeue message" doc:id="e067d4d7-d5b2-4066-9140-8fef573fd5d2" config-ref="Azure_Storage_Config" queueName="inbound-queue" target="message"/>
+		<ee:transform doc:name="Transform Message" doc:id="c9255028-9102-4382-8755-d5f913122e00" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	messageId: vars.message.id,
+	messageContent: vars.message.messageContent,
+	enqueueTime: vars.message.insertionTime,
+	dequeueCount: vars.message.dequeueCount
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="707d9164-e22c-42f2-b378-501178f8974b" message="#[payload]"/>
+	</flow>
+</mule>
